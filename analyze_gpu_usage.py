@@ -5,7 +5,7 @@ import pandas as pd
 # PATHS
 ############################################
 
-ROOT = "/home/nohel/DATA/MultipleMyeloma_analyses2"
+ROOT = "/home/nohel/DATA/MultipleMyeloma_analyses"
 
 GPU_LOG_DIR = os.path.join(ROOT, "gpu_logs")
 TIME_LOG = os.path.join(ROOT, "inference_time_log.csv")

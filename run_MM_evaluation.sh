@@ -6,7 +6,7 @@ set -euo pipefail
 # COMMON SETTINGS
 # =========================
 
-ANALYSIS_ROOT="/home/nohel/DATA/MultipleMyeloma_analyses2"
+ANALYSIS_ROOT="/home/nohel/DATA/MultipleMyeloma_analyses"
 ANALYSIS_NAME="longi_summary_all"
 IOU_THRESHOLD=0.1
 

@@ -7,7 +7,7 @@ shopt -s nullglob
 # SETTINGS
 ############################################
 
-ANALYSIS_ROOT="/home/nohel/DATA/MultipleMyeloma_analyses2"
+ANALYSIS_ROOT="/home/nohel/DATA/MultipleMyeloma_analyses"
 SPLITS_FILE="$ANALYSIS_ROOT/splits_final.json"
 
 RAW_ROOT="/home/nohel/DATA/nnUNet_raw"
