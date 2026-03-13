@@ -6,7 +6,7 @@ set -euo pipefail
 # COMMON SETTINGS
 # =========================
 
-ANALYSIS_ROOT="/home/nohel/DATA/MultipleMyeloma_analyses"
+ANALYSIS_ROOT="/home/nohel/DATA/MultipleMyeloma_analyses2"
 ANALYSIS_NAME="longi_summary_all"
 IOU_THRESHOLD=0.1
 
@@ -14,8 +14,8 @@ IOU_THRESHOLD=0.1
 # PREDICTION ROOTS
 # =========================
 
-FULL_PRED_ROOT="/home/nohel/DATA/nnUNet_results/predict/full_models"
-ZERO_PRED_ROOT="/home/nohel/DATA/nnUNet_results/predict/zero_input_models"
+FULL_PRED_ROOT="/home/nohel/DATA/nnUNet_results/predict_new/full_models"
+ZERO_PRED_ROOT="/home/nohel/DATA/nnUNet_results/predict_new/zero_input_models"
 
 # =========================
 # TRAINED MODELS (metadata)
@@ -36,13 +36,43 @@ GT_ROOT="/home/nohel/DATA/nnUNet_raw/MM_GT_DATA"
 FULL_DATASETS=(
 Dataset700_MM_Lesion_seg_Leave_One_Out_without_ConvCT
 Dataset701_MM_Lesion_seg_Leave_One_Out_without_VMI_40
+Dataset702_MM_Lesion_seg_Leave_One_Out_without_VMI_80
+Dataset703_MM_Lesion_seg_Leave_One_Out_without_VMI_120
+Dataset704_MM_Lesion_seg_Leave_One_Out_without_CaSupp_25
+Dataset705_MM_Lesion_seg_Leave_One_Out_without_CaSupp_50
+Dataset706_MM_Lesion_seg_Leave_One_Out_without_CaSupp_75
+Dataset707_MM_Lesion_seg_Leave_One_Out_without_CaSupp_100
+
+Dataset708_MM_Lesion_seg_all_together
+Dataset709_MM_Lesion_seg_just_ConvCT
+Dataset710_MM_Lesion_seg_just_VMI_40
+Dataset711_MM_Lesion_seg_just_VMI_80
+Dataset712_MM_Lesion_seg_just_VMI_120
+Dataset713_MM_Lesion_seg_just_CaSupp_25
+Dataset714_MM_Lesion_seg_just_CaSupp_50
+Dataset715_MM_Lesion_seg_just_CaSupp_75
+Dataset716_MM_Lesion_seg_just_CaSupp_100
+
+Dataset717_MM_Lesion_seg_all_VMI
+Dataset718_MM_Lesion_seg_all_CaSupp
 )
 
 ZERO_DATASETS=(
 Dataset708_MM_Lesion_seg_all_together_zero_input_channel_convCT
 Dataset708_MM_Lesion_seg_all_together_zero_input_channel_VMI40
+Dataset708_MM_Lesion_seg_all_together_zero_input_channel_VMI80
+Dataset708_MM_Lesion_seg_all_together_zero_input_channel_VMI120
+Dataset708_MM_Lesion_seg_all_together_zero_input_channel_CaSupp_25
+Dataset708_MM_Lesion_seg_all_together_zero_input_channel_CaSupp_50
+Dataset708_MM_Lesion_seg_all_together_zero_input_channel_CaSupp_75
+Dataset708_MM_Lesion_seg_all_together_zero_input_channel_CaSupp_100
 Dataset717_MM_Lesion_seg_all_VMI_zero_input_channel_VMI40
+Dataset717_MM_Lesion_seg_all_VMI_zero_input_channel_VMI80
+Dataset717_MM_Lesion_seg_all_VMI_zero_input_channel_VMI120
 Dataset718_MM_Lesion_seg_all_CaSupp_zero_input_channel_CaSupp_25
+Dataset718_MM_Lesion_seg_all_CaSupp_zero_input_channel_CaSupp_50
+Dataset718_MM_Lesion_seg_all_CaSupp_zero_input_channel_CaSupp_75
+Dataset718_MM_Lesion_seg_all_CaSupp_zero_input_channel_CaSupp_100
 )
 
 # =========================
@@ -106,7 +136,7 @@ for MODEL_NAME in "${DATASET_LIST[@]}"; do
 
     for FOLD in 0 1 2 3 4; do
 
-        PRED_DIR="$PRED_MODEL_DIR/fold_$FOLD/prediction"
+        PRED_DIR="$PRED_MODEL_DIR/fold_$FOLD"
         GT_DIR="$GT_ROOT/labelsTr_fold_$FOLD"
 
         [[ -d "$PRED_DIR" && -d "$GT_DIR" ]] || continue

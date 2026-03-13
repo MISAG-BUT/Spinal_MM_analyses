@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import re
 
-ROOT = "/home/nohel/DATA/MultipleMyeloma_analyses"
+ROOT = "/home/nohel/DATA/MultipleMyeloma_analyses2"
 
 FULL_DIR = os.path.join(ROOT, "full_models", "longi_summary_all")
 ZERO_DIR = os.path.join(ROOT, "zero_input_models", "longi_summary_all")
