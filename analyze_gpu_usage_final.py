@@ -10,7 +10,12 @@ ROOT = "/home/nohel/DATA/MultipleMyeloma_analyses"
 GPU_LOG_DIR = os.path.join(ROOT, "gpu_logs")
 TIME_LOG = os.path.join(ROOT, "inference_time_log.csv")
 
-OUTPUT_FILE = os.path.join(ROOT, "gpu_usage_summary.csv")
+# output directory
+OUTPUT_DIR = os.path.join(ROOT, "gpu_analyses_results")
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+OUTPUT_FILE = os.path.join(OUTPUT_DIR, "gpu_usage_summary.csv")
+SUMMARY_FILE = os.path.join(OUTPUT_DIR, "gpu_usage_model_means.csv")
 
 ############################################
 # LOAD RUNTIME LOG
@@ -42,7 +47,7 @@ for file in os.listdir(GPU_LOG_DIR):
     model, fold = name.split("_fold_")
     fold = int(fold)
 
-    # load GPU log (handle spaces after commas)
+    # load GPU log
     df = pd.read_csv(path, skipinitialspace=True)
 
     # remove units and convert to numeric
@@ -59,7 +64,6 @@ for file in os.listdir(GPU_LOG_DIR):
 
     avg_power = df["power.draw [W]"].mean()
 
-    # energy consumption in Wh
     energy_wh = df["power.draw [W]"].sum() / 3600
 
     rows.append({
@@ -76,7 +80,7 @@ for file in os.listdir(GPU_LOG_DIR):
 gpu_df = pd.DataFrame(rows)
 
 ############################################
-# MERGE WITH RUNTIME DATA
+# MERGE WITH RUNTIME
 ############################################
 
 merged = gpu_df.merge(
@@ -85,7 +89,7 @@ merged = gpu_df.merge(
     how="left"
 )
 
-# Sort by model name and fold
+# sort results
 merged = merged.sort_values(by=["model", "fold"]).reset_index(drop=True)
 
 merged.to_csv(OUTPUT_FILE, index=False)
@@ -93,7 +97,7 @@ merged.to_csv(OUTPUT_FILE, index=False)
 print("Saved:", OUTPUT_FILE)
 
 ############################################
-# MODEL-LEVEL SUMMARY
+# MODEL LEVEL SUMMARY
 ############################################
 
 model_summary = merged.groupby("model").agg({
@@ -108,10 +112,9 @@ model_summary = merged.groupby("model").agg({
 
 }).reset_index()
 
-# Sort by model name
+# sort models
 model_summary = model_summary.sort_values(by="model").reset_index(drop=True)
 
-summary_file = os.path.join(ROOT, "gpu_usage_model_means.csv")
-model_summary.to_csv(summary_file, index=False)
+model_summary.to_csv(SUMMARY_FILE, index=False)
 
-print("Saved:", summary_file)
+print("Saved:", SUMMARY_FILE)
