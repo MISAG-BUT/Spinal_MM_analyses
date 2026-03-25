@@ -11,7 +11,7 @@ ROOT = "/home/nohel/DATA/MultipleMyeloma_analyses"
 # ANALYSIS NAME (CHANGE HERE)
 # =========================================
 
-ANALYSIS_NAME = "longi_summary_all"
+ANALYSIS_NAME = "longi_summary_larger_than_0_5_cubic_cm"
 
 FULL_DIR = os.path.join(ROOT, "full_models", ANALYSIS_NAME)
 ZERO_DIR = os.path.join(ROOT, "zero_input_models", ANALYSIS_NAME)
@@ -217,5 +217,46 @@ if len(importance_df) > 0:
         plt.close()
 
         print("Saved:", plot_path)
+
+# =====================================================
+# STEP 5 — FEATURE IMPORTANCE HEATMAP
+# =====================================================
+
+import seaborn as sns
+
+if len(importance_df) > 0:
+
+    heatmap_df = importance_df.pivot_table(
+        index="channel",
+        columns="dataset",
+        values="Dice_drop"
+    )
+
+    plt.figure(figsize=(6,6))
+
+    sns.heatmap(
+        heatmap_df,
+        annot=True,
+        cmap="viridis",
+        fmt=".3f",
+        linewidths=0.5
+    )
+
+    plt.title("Channel importance heatmap (Dice drop)")
+    plt.ylabel("Removed channel")
+    plt.xlabel("Dataset")
+
+    plt.tight_layout()
+
+    heatmap_path = os.path.join(
+        RESULTS_DIR,
+        "feature_importance_heatmap.png"
+    )
+
+    plt.savefig(heatmap_path, dpi=300)
+
+    plt.close()
+
+    print("Saved:", heatmap_path)
 
 print("Analysis finished.")
