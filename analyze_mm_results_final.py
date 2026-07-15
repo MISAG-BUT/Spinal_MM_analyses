@@ -11,7 +11,8 @@ ROOT = "/home/nohel/DATA/MultipleMyeloma_analyses"
 # ANALYSIS NAME (CHANGE HERE)
 # =========================================
 
-ANALYSIS_NAME = "longi_summary_larger_than_0_5_cubic_cm"
+ANALYSIS_NAME = "longi_summary_all"
+#ANALYSIS_NAME = "longi_summary_larger_than_0_5_cubic_cm"
 
 FULL_DIR = os.path.join(ROOT, "full_models", ANALYSIS_NAME)
 ZERO_DIR = os.path.join(ROOT, "zero_input_models", ANALYSIS_NAME)
