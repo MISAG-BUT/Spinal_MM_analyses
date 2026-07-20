@@ -6,6 +6,7 @@ import shutil
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+from matplotlib.patches import Patch
 
 ROOT = "/home/nohel/DATA/MultipleMyeloma_analyses"
 ANALYSIS = "longi_summary_all"
@@ -132,6 +133,7 @@ def save_threshold_plots(df):
     os.makedirs(os.path.join(OUTPUT_DIR, "threshold_comparison"), exist_ok=True)
     for metric in METRICS:
         fig, ax = plt.subplots(figsize=(10, 5))
+
         sns.boxplot(
             data=df,
             x="threshold",
@@ -140,57 +142,79 @@ def save_threshold_plots(df):
             order=THRESHOLD_ORDER,
             palette=["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b"],
             showfliers=False,
-            width=0.6,
-            fliersize=0,
-            boxprops={"edgecolor": "black", "linewidth": 1.2},
-            whiskerprops={"color": "black", "linewidth": 1.0},
-            capprops={"color": "black", "linewidth": 1.0},
-            medianprops={"color": "black", "linewidth": 1.3},
             ax=ax,
         )
-        for patch in ax.artists:
-            patch.set_alpha(0.95)
-        means = df.groupby("threshold")[metric].mean()
-        for i, value in enumerate(means.reindex(THRESHOLD_ORDER).tolist()):
-            ax.scatter([i], [value], marker="x", color="red", s=120, zorder=3, linewidths=1.8)
+
+        for container in ax.containers:
+            for box in container.boxes:
+                box.set_alpha(0.95)
+                box.set_edgecolor("black")
+                box.set_linewidth(1.5)
+
+        means_df = (
+            df.groupby(["threshold", "model_label"], sort=False)[metric]
+            .mean()
+            .reset_index()
+        )
+        means_df["threshold"] = pd.Categorical(means_df["threshold"], categories=THRESHOLD_ORDER, ordered=True)
+        means_df = means_df.sort_values(["threshold", "model_label"]).reset_index(drop=True)
+
+        model_order = [m for m in df["model_label"].dropna().unique()]
+        threshold_positions = {threshold: idx for idx, threshold in enumerate(THRESHOLD_ORDER)}
+        model_positions = {model: idx for idx, model in enumerate(model_order)}
+
+        for _, row in means_df.iterrows():
+            x_pos = threshold_positions[row["threshold"]] + (model_positions[row["model_label"]] - (len(model_order) - 1) / 2) * 0.18
+            ax.scatter(
+                [x_pos],
+                [row[metric]],
+                marker="x",
+                color="red",
+                s=120,
+                zorder=3,
+                linewidths=1.8,
+            )
+
         ax.set_title(f"Per-patient {metric} comparison")
         ax.set_xlabel("Threshold")
         ax.set_ylabel(metric)
         ax.grid(axis="y", linestyle="--", alpha=0.3)
         ax.tick_params(axis="x", rotation=0)
+
         handles, labels = ax.get_legend_handles_labels()
         if handles:
             ax.legend(handles, labels, title="Model", loc="upper left", bbox_to_anchor=(1.01, 1.0), frameon=False)
+
         plt.tight_layout()
         out_path = os.path.join(OUTPUT_DIR, "threshold_comparison", f"{metric}_boxplot.png")
         plt.savefig(out_path, dpi=600, bbox_inches="tight")
         plt.close(fig)
 
-        fig, ax = plt.subplots(figsize=(10, 5))
-        sns.violinplot(
-            data=df,
-            x="threshold",
-            y=metric,
-            hue="model_label",
-            order=THRESHOLD_ORDER,
-            palette="Set2",
-            inner="box",
-            cut=0,
-            density_norm="width",
-            ax=ax,
-        )
-        ax.set_title(f"Per-patient {metric} violin comparison")
-        ax.set_xlabel("Threshold")
-        ax.set_ylabel(metric)
-        ax.grid(axis="y", linestyle="--", alpha=0.3)
-        ax.tick_params(axis="x", rotation=0)
-        handles, labels = ax.get_legend_handles_labels()
-        if handles:
-            ax.legend(handles, labels, title="Model", loc="upper left", bbox_to_anchor=(1.01, 1.0), frameon=False)
-        plt.tight_layout()
-        out_path = os.path.join(OUTPUT_DIR, "threshold_comparison", f"{metric}_violin.png")
-        plt.savefig(out_path, dpi=600, bbox_inches="tight")
-        plt.close(fig)
+        # fig, ax = plt.subplots(figsize=(10, 5))
+        # sns.violinplot(
+        #     data=df,
+        #     x="threshold",
+        #     y=metric,
+        #     hue="model_label",
+        #     order=THRESHOLD_ORDER,
+        #     palette="Set2",
+        #     inner="box",
+        #     cut=0,
+        #     density_norm="width",
+        #     ax=ax,
+        # )
+        # ax.set_title(f"Per-patient {metric} violin comparison")
+        # ax.set_xlabel("Threshold")
+        # ax.set_ylabel(metric)
+        # ax.grid(axis="y", linestyle="--", alpha=0.3)
+        # ax.tick_params(axis="x", rotation=0)
+        # handles, labels = ax.get_legend_handles_labels()
+        # if handles:
+        #     ax.legend(handles, labels, title="Model", loc="upper left", bbox_to_anchor=(1.01, 1.0), frameon=False)
+        # plt.tight_layout()
+        # out_path = os.path.join(OUTPUT_DIR, "threshold_comparison", f"{metric}_violin.png")
+        # plt.savefig(out_path, dpi=600, bbox_inches="tight")
+        # plt.close(fig)
 
 
 def save_longi_plots(df):
@@ -251,27 +275,27 @@ def save_longi_plots(df):
             plt.savefig(out_path, dpi=600, bbox_inches="tight")
             plt.close(fig)
 
-            fig, ax = plt.subplots(figsize=(12, 6))
-            sns.violinplot(
-                data=subset,
-                x="dataset_label",
-                y=metric,
-                order=order,
-                ax=ax,
-                inner="box",
-                cut=0,
-                density_norm="width",
-                color="#6BAED6"
-            )
-            ax.set_title(f"{metric} violin — {title}")
-            ax.set_xlabel("Model")
-            ax.set_ylabel(metric)
-            ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha="right")
-            ax.grid(axis="y", linestyle="--", alpha=0.3)
-            plt.tight_layout()
-            out_path = os.path.join(OUTPUT_DIR, "longi_summary_all", f"{prefix}_{metric}_violin.png")
-            plt.savefig(out_path, dpi=600, bbox_inches="tight")
-            plt.close(fig)
+            # fig, ax = plt.subplots(figsize=(12, 6))
+            # sns.violinplot(
+            #     data=subset,
+            #     x="dataset_label",
+            #     y=metric,
+            #     order=order,
+            #     ax=ax,
+            #     inner="box",
+            #     cut=0,
+            #     density_norm="width",
+            #     color="#6BAED6"
+            # )
+            # ax.set_title(f"{metric} violin — {title}")
+            # ax.set_xlabel("Model")
+            # ax.set_ylabel(metric)
+            # ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha="right")
+            # ax.grid(axis="y", linestyle="--", alpha=0.3)
+            # plt.tight_layout()
+            # out_path = os.path.join(OUTPUT_DIR, "longi_summary_all", f"{prefix}_{metric}_violin.png")
+            # plt.savefig(out_path, dpi=600, bbox_inches="tight")
+            # plt.close(fig)
 
 
 def main():
