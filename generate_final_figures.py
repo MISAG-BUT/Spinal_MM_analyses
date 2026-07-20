@@ -3,6 +3,7 @@ import json
 import glob
 import re
 import shutil
+import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -151,33 +152,37 @@ def save_threshold_plots(df):
                 box.set_edgecolor("black")
                 box.set_linewidth(1.5)
 
-        means_df = (
-            df.groupby(["threshold", "model_label"], sort=False)[metric]
-            .mean()
-            .reset_index()
-        )
-        means_df["threshold"] = pd.Categorical(means_df["threshold"], categories=THRESHOLD_ORDER, ordered=True)
-        means_df = means_df.sort_values(["threshold", "model_label"]).reset_index(drop=True)
-
         model_order = [m for m in df["model_label"].dropna().unique()]
-        threshold_positions = {threshold: idx for idx, threshold in enumerate(THRESHOLD_ORDER)}
-        model_positions = {model: idx for idx, model in enumerate(model_order)}
+        for model_idx, model_label in enumerate(model_order):
+            container = ax.containers[model_idx] if model_idx < len(ax.containers) else None
+            if container is None:
+                continue
+            for threshold_idx, threshold in enumerate(THRESHOLD_ORDER):
+                subset = df[(df["threshold"] == threshold) & (df["model_label"] == model_label)]
+                if subset.empty:
+                    continue
+                values = subset[metric].dropna().tolist()
+                if not values:
+                    continue
+                if threshold_idx >= len(container.boxes):
+                    continue
+                box = container.boxes[threshold_idx]
+                x_center = float(np.mean(box.get_path().vertices[:, 0]))
+                mean_value = subset[metric].mean()
+                ax.scatter(
+                    [x_center + 0.02],
+                    [mean_value],
+                    marker="x",
+                    color="red",
+                    s=120,
+                    zorder=3,
+                    linewidths=1.8,
+                )
 
-        for _, row in means_df.iterrows():
-            x_pos = threshold_positions[row["threshold"]] + (model_positions[row["model_label"]] - (len(model_order) - 1) / 2) * 0.18
-            ax.scatter(
-                [x_pos],
-                [row[metric]],
-                marker="x",
-                color="red",
-                s=120,
-                zorder=3,
-                linewidths=1.8,
-            )
-
-        ax.set_title(f"Per-patient {metric} comparison")
+        ax.set_title(f"{metric} comparison")
         ax.set_xlabel("Threshold")
         ax.set_ylabel(metric)
+        ax.set_ylim(0.2, 1.02)
         ax.grid(axis="y", linestyle="--", alpha=0.3)
         ax.tick_params(axis="x", rotation=0)
 
