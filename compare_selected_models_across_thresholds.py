@@ -14,6 +14,9 @@ TARGET_MODELS = {
     "ConvCT (709)": "Dataset709_MM_Lesion_seg_just_ConvCT",
     "VMI40 (710)": "Dataset710_MM_Lesion_seg_just_VMI_40",
     "CaSupp25 (713)": "Dataset713_MM_Lesion_seg_just_CaSupp_25",
+    "All together (708)": "Dataset708_MM_Lesion_seg_all_together",
+    "All VMI (717)": "Dataset717_MM_Lesion_seg_all_VMI",
+    "All CaSupp (718)": "Dataset718_MM_Lesion_seg_all_CaSupp",
 }
 
 OUTPUT_DIR = os.path.join(ROOT, "results", "threshold_comparison")
@@ -74,9 +77,9 @@ def save_summary_table(df):
 def make_plots(df):
     metrics = ["Dice", "F1", "NSD"]
 
-    fig, axes = plt.subplots(1, len(metrics), figsize=(18, 5), sharey=False)
+    for metric in metrics:
+        fig, ax = plt.subplots(figsize=(10, 5))
 
-    for ax, metric in zip(axes, metrics):
         sns.boxplot(
             data=df,
             x="threshold",
@@ -88,14 +91,77 @@ def make_plots(df):
             ax=ax,
         )
 
-        ax.set_title(metric)
+        ax.set_title(f"{metric} comparison across thresholds")
         ax.set_xlabel("Threshold")
         ax.set_ylabel(metric)
         ax.grid(axis="y", linestyle="--", alpha=0.3)
         ax.tick_params(axis="x", rotation=0)
 
-    handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, title="Model", loc="upper center", bbox_to_anchor=(0.5, 1.02), ncol=3)
+        handles, labels = ax.get_legend_handles_labels()
+        if handles:
+            ax.legend(handles, labels, title="Model", loc="upper left", bbox_to_anchor=(1.01, 1.0), frameon=False)
+
+        plt.tight_layout()
+
+        plot_path = os.path.join(OUTPUT_DIR, f"selected_models_{metric}_boxplot.png")
+        plt.savefig(plot_path, dpi=300, bbox_inches="tight")
+        plt.close(fig)
+        print(f"Saved plot: {plot_path}")
+
+        fig, ax = plt.subplots(figsize=(10, 5))
+
+        sns.violinplot(
+            data=df,
+            x="threshold",
+            y=metric,
+            hue="model_label",
+            order=["all", "0.3cm", "0.5cm"],
+            palette="Set2",
+            inner="box",
+            cut=0,
+            scale="width",
+            ax=ax,
+        )
+
+        ax.set_title(f"{metric} violin comparison across thresholds")
+        ax.set_xlabel("Threshold")
+        ax.set_ylabel(metric)
+        ax.grid(axis="y", linestyle="--", alpha=0.3)
+        ax.tick_params(axis="x", rotation=0)
+
+        handles, labels = ax.get_legend_handles_labels()
+        if handles:
+            ax.legend(handles, labels, title="Model", loc="upper left", bbox_to_anchor=(1.01, 1.0), frameon=False)
+
+        plt.tight_layout()
+
+        plot_path = os.path.join(OUTPUT_DIR, f"selected_models_{metric}_violin.png")
+        plt.savefig(plot_path, dpi=300, bbox_inches="tight")
+        plt.close(fig)
+        print(f"Saved plot: {plot_path}")
+
+    fig, axes = plt.subplots(1, len(metrics), figsize=(18, 5), sharey=False)
+
+    for ax, metric in zip(axes, metrics):
+        sns.boxplot(
+            data=df,
+            x="threshold",
+            y=metric,
+            order=["all", "0.3cm", "0.5cm"],
+            palette="Set2",
+            showfliers=False,
+            ax=ax,
+        )
+
+        ax.set_title(metric)
+        ax.set_xlabel("Threshold")
+        ax.set_ylabel(metric)
+        ax.grid(axis="y", linestyle="--", alpha=0.3)
+        ax.tick_params(axis="x", rotation=0)
+        ax.set_xlabel("Threshold")
+        ax.set_ylabel(metric)
+        if ax.legend_ is not None:
+            ax.legend_.remove()
 
     fig.suptitle("Comparison of selected models across thresholds", fontsize=14, y=1.08)
     plt.tight_layout(rect=[0, 0, 1, 0.95])
@@ -105,39 +171,36 @@ def make_plots(df):
     plt.close(fig)
     print(f"Saved plot: {plot_path}")
 
-    fig2, axes2 = plt.subplots(3, 1, figsize=(10, 12), sharex=False)
+    fig_violin, axes_violin = plt.subplots(1, len(metrics), figsize=(18, 5), sharey=False)
 
-    for ax2, metric in zip(axes2, metrics):
-        sns.barplot(
-            data=(
-                df.groupby(["threshold", "model_label", "fold"])[metric]
-                .mean()
-                .reset_index()
-                .groupby(["threshold", "model_label"])[metric]
-                .mean()
-                .reset_index()
-            ),
+    for ax, metric in zip(axes_violin, metrics):
+        sns.violinplot(
+            data=df,
             x="threshold",
             y=metric,
-            hue="model_label",
+            order=["all", "0.3cm", "0.5cm"],
             palette="Set2",
-            ax=ax2,
+            inner="box",
+            cut=0,
+            scale="width",
+            ax=ax,
         )
-        ax2.set_title(f"Mean {metric} by threshold")
-        ax2.set_xlabel("Threshold")
-        ax2.set_ylabel(f"Mean {metric}")
-        ax2.grid(axis="y", linestyle="--", alpha=0.3)
 
-    handles2, labels2 = axes2[0].get_legend_handles_labels()
-    fig2.legend(handles2, labels2, title="Model", loc="upper center", bbox_to_anchor=(0.5, 1.02), ncol=3)
+        ax.set_title(f"{metric} violin")
+        ax.set_xlabel("Threshold")
+        ax.set_ylabel(metric)
+        ax.grid(axis="y", linestyle="--", alpha=0.3)
+        ax.tick_params(axis="x", rotation=0)
+        if ax.legend_ is not None:
+            ax.legend_.remove()
 
-    fig2.suptitle("Mean metric comparison across thresholds", fontsize=14, y=1.08)
+    fig_violin.suptitle("Violin comparison of selected models across thresholds", fontsize=14, y=1.08)
     plt.tight_layout(rect=[0, 0, 1, 0.95])
 
-    plot_path2 = os.path.join(OUTPUT_DIR, "selected_models_threshold_mean_comparison.png")
-    plt.savefig(plot_path2, dpi=300, bbox_inches="tight")
-    plt.close(fig2)
-    print(f"Saved plot: {plot_path2}")
+    plot_path_violin = os.path.join(OUTPUT_DIR, "selected_models_threshold_violin_comparison.png")
+    plt.savefig(plot_path_violin, dpi=300, bbox_inches="tight")
+    plt.close(fig_violin)
+    print(f"Saved plot: {plot_path_violin}")
 
 
 if __name__ == "__main__":
