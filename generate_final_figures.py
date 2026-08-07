@@ -58,8 +58,44 @@ DATASET_LABELS = {
     718: "All CaSupp (718)",
 }
 
+DATASET_GROUP = {
+    700: "LOO",
+    701: "LOO",
+    702: "LOO",
+    703: "LOO",
+    704: "LOO",
+    705: "LOO",
+    706: "LOO",
+    707: "LOO",
+    708: "Grouped",
+    709: "ConvCT",
+    710: "VMI",
+    711: "VMI",
+    712: "VMI",
+    713: "CaSupp",
+    714: "CaSupp",
+    715: "CaSupp",
+    716: "CaSupp",
+    717: "Grouped",
+    718: "Grouped",
+}
+
+GROUP_COLORS = {
+    "LOO": "#4C78A8",
+    "ConvCT": "#ff7f0e",
+    "VMI": "#2ca02c",
+    "CaSupp": "#d62728",
+    "Grouped": "#9467bd",
+}
+
 METRICS = ["Dice", "F1", "NSD"]
 THRESHOLD_ORDER = ["all", "0.3cm", "0.5cm"]
+THRESHOLD_DISPLAY = {
+    "all": "all",
+    # use mathtext so the 3 is superscript (no caret shown)
+    "0.3cm": r"0.3 cm$^3$",
+    "0.5cm": r"0.5 cm$^3$",
+}
 
 
 def extract_dataset_id(model_name):
@@ -201,7 +237,7 @@ def save_threshold_plots(df):
                     [x_center + 0.02],
                     [mean_value],
                     marker="x",
-                    color="red",
+                    color="black",
                     s=120,
                     zorder=3,
                     linewidths=1.8,
@@ -209,6 +245,8 @@ def save_threshold_plots(df):
 
         ax.set_title(f"{metric} comparison")
         ax.set_xlabel("Threshold")
+        # show threshold labels in cubic centimeters
+        ax.set_xticklabels([THRESHOLD_DISPLAY.get(t, t) for t in THRESHOLD_ORDER])
         ax.set_ylabel(metric)
         ax.set_ylim(0.2, 1.02)
         ax.grid(axis="y", linestyle="--", alpha=0.3)
@@ -223,33 +261,6 @@ def save_threshold_plots(df):
         out_path = os.path.join(OUTPUT_DIR, "threshold_comparison", f"lesion_size_{metric}_boxplot.png")
         plt.savefig(out_path, dpi=600, bbox_inches="tight")
         plt.close(fig)
-
-        # fig, ax = plt.subplots(figsize=(10, 5))
-        # sns.violinplot(
-        #     data=df,
-        #     x="threshold",
-        #     y=metric,
-        #     hue="model_label",
-        #     order=THRESHOLD_ORDER,
-        #     palette="Set2",
-        #     inner="box",
-        #     cut=0,
-        #     density_norm="width",
-        #     ax=ax,
-        # )
-        # ax.set_title(f"Per-patient {metric} violin comparison")
-        # ax.set_xlabel("Threshold")
-        # ax.set_ylabel(metric)
-        # ax.grid(axis="y", linestyle="--", alpha=0.3)
-        # ax.tick_params(axis="x", rotation=0)
-        # handles, labels = ax.get_legend_handles_labels()
-        # if handles:
-        #     ax.legend(handles, labels, title="Model", loc="upper left", bbox_to_anchor=(1.01, 1.0), frameon=False)
-        # plt.tight_layout()
-        # out_path = os.path.join(OUTPUT_DIR, "threshold_comparison", f"{metric}_violin.png")
-        # plt.savefig(out_path, dpi=600, bbox_inches="tight")
-        # plt.close(fig)
-
 
 def load_model_results(base_dir, analysis_name, model_type):
     rows = []
@@ -411,12 +422,6 @@ def save_feature_importance_outputs(threshold_label, analysis_name, df, df_mean,
 
 def save_longi_plots(df):
     os.makedirs(os.path.join(OUTPUT_DIR, "longi_summary_all"), exist_ok=True)
-    #groups = [
-    #    (list(range(700, 719)), "models_700_718", "longi_summary_all — models 700–718"),
-    #    (list(range(709, 717)), "single_input_709_716", "longi_summary_all — single-input models 709–716"),
-    #    (list(range(700, 708)), "leave_one_out_700_707", "longi_summary_all — leave-one-out models 700–707"),
-    #    ([708, 717, 718], "grouped_708_717_718", "longi_summary_all — grouped datasets 708, 717, 718"),
-    #]
     groups = [
         (list(range(700, 719)), "models_700_718", "models 700–718"),
         (list(range(709, 717)), "single_input_709_716", "single-input models 709–716"),
@@ -434,18 +439,25 @@ def save_longi_plots(df):
         subset["dataset_label"] = pd.Categorical(subset["dataset_label"], categories=order, ordered=True)
         for metric in METRICS:
             fig, ax = plt.subplots(figsize=(12, 6))
+            palette = [
+                GROUP_COLORS.get(DATASET_GROUP.get(dataset_id, "LOO"), "#4C78A8")
+                for dataset_id in ids
+            ]
             sns.boxplot(
                 data=subset,
                 x="dataset_label",
                 y=metric,
                 order=order,
+                palette=palette,
                 ax=ax,
                 showfliers=False,
-                color="#4C78A8"
             )
+            for i, artist in enumerate(ax.artists):
+                artist.set_edgecolor("black")
+                artist.set_alpha(0.9)
             means = subset.groupby("dataset_label")[metric].mean()
             for i, value in enumerate(means.reindex(order).tolist()):
-                ax.scatter([i], [value], marker="x", color="red", s=120, zorder=3, linewidths=1.8)
+                ax.scatter([i], [value], marker="x", color="black", s=120, zorder=3, linewidths=1.8)
             sns.stripplot(
                 data=subset,
                 x="dataset_label",
@@ -455,7 +467,7 @@ def save_longi_plots(df):
                 color="black",
                 alpha=0.35,
                 size=3,
-                jitter=0.1
+                jitter=0.1,
             )
             ax.set_title(f"{metric} — {title}")
             ax.set_xlabel("Model")
@@ -463,10 +475,17 @@ def save_longi_plots(df):
             ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha="right")
             ax.grid(axis="y", linestyle="--", alpha=0.3)
 
-            legend_handles = [Patch(facecolor="white", edgecolor="black", label=DATASET_LABELS.get(dataset_id, f"{dataset_id}")) for dataset_id in ids]
-            if legend_handles:
+            dataset_handles = [
+                Patch(
+                    facecolor=GROUP_COLORS.get(DATASET_GROUP.get(dataset_id, "LOO"), "#4C78A8"),
+                    edgecolor="black",
+                    label=DATASET_LABELS.get(dataset_id, f"Dataset {dataset_id}"),
+                )
+                for dataset_id in ids
+            ]
+            if dataset_handles:
                 ax.legend(
-                    handles=legend_handles,
+                    handles=dataset_handles,
                     title="Dataset",
                     loc="upper left",
                     bbox_to_anchor=(1.02, 1.0),
@@ -477,29 +496,6 @@ def save_longi_plots(df):
             out_path = os.path.join(OUTPUT_DIR, "longi_summary_all", f"{prefix}_{metric}_boxplot.png")
             plt.savefig(out_path, dpi=600, bbox_inches="tight")
             plt.close(fig)
-
-            # fig, ax = plt.subplots(figsize=(12, 6))
-            # sns.violinplot(
-            #     data=subset,
-            #     x="dataset_label",
-            #     y=metric,
-            #     order=order,
-            #     ax=ax,
-            #     inner="box",
-            #     cut=0,
-            #     density_norm="width",
-            #     color="#6BAED6"
-            # )
-            # ax.set_title(f"{metric} violin — {title}")
-            # ax.set_xlabel("Model")
-            # ax.set_ylabel(metric)
-            # ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha="right")
-            # ax.grid(axis="y", linestyle="--", alpha=0.3)
-            # plt.tight_layout()
-            # out_path = os.path.join(OUTPUT_DIR, "longi_summary_all", f"{prefix}_{metric}_violin.png")
-            # plt.savefig(out_path, dpi=600, bbox_inches="tight")
-            # plt.close(fig)
-
 
 def main():
     threshold_df = load_threshold_patient_rows()
