@@ -30,6 +30,12 @@ TARGET_MODELS = {
     "All CaSupp (718)": "Dataset718_MM_Lesion_seg_all_CaSupp",
 }
 
+BASE_MODELS = {
+    "Dataset708": "Dataset708_MM_Lesion_seg_all_together",
+    "Dataset717": "Dataset717_MM_Lesion_seg_all_VMI",
+    "Dataset718": "Dataset718_MM_Lesion_seg_all_CaSupp",
+}
+
 METRICS = ["Dice", "F1", "NSD"]
 THRESHOLD_ORDER = ["all", "0.3cm", "0.5cm"]
 
@@ -191,7 +197,8 @@ def save_threshold_plots(df):
             ax.legend(handles, labels, title="Model", loc="upper left", bbox_to_anchor=(1.01, 1.0), frameon=False)
 
         plt.tight_layout()
-        out_path = os.path.join(OUTPUT_DIR, "threshold_comparison", f"{metric}_boxplot.png")
+        #out_path = os.path.join(OUTPUT_DIR, "threshold_comparison", f"{metric}_boxplot.png")
+        out_path = os.path.join(OUTPUT_DIR, "threshold_comparison", f"lesion_size_{metric}_boxplot.png")
         plt.savefig(out_path, dpi=600, bbox_inches="tight")
         plt.close(fig)
 
@@ -220,6 +227,164 @@ def save_threshold_plots(df):
         # out_path = os.path.join(OUTPUT_DIR, "threshold_comparison", f"{metric}_violin.png")
         # plt.savefig(out_path, dpi=600, bbox_inches="tight")
         # plt.close(fig)
+
+
+def load_model_results(base_dir, analysis_name, model_type):
+    rows = []
+    if not os.path.isdir(base_dir):
+        return rows
+    for model in sorted(os.listdir(base_dir)):
+        model_dir = os.path.join(base_dir, model)
+        if not os.path.isdir(model_dir):
+            continue
+        for fold in range(5):
+            json_file = os.path.join(model_dir, f"{analysis_name}_fold_{fold}.json")
+            if not os.path.exists(json_file):
+                continue
+            with open(json_file) as fh:
+                data = json.load(fh)
+            fm = data.get("foreground_mean", {})
+            rows.append({
+                "model_type": model_type,
+                "model_name": model,
+                "fold": fold,
+                "Dice": fm.get("Dice"),
+                "F1": fm.get("F1"),
+                "NSD": fm.get("NSD"),
+            })
+    return rows
+
+
+def compute_feature_importance(analysis_name):
+    full_dir = os.path.join(ROOT, "full_models", analysis_name)
+    zero_dir = os.path.join(ROOT, "zero_input_models", analysis_name)
+
+    rows = []
+    rows.extend(load_model_results(full_dir, analysis_name, "full_model"))
+    rows.extend(load_model_results(zero_dir, analysis_name, "zero_input"))
+
+    if not rows:
+        return None, None, None
+
+    df = pd.DataFrame(rows)
+    df = df.sort_values(["model_type", "model_name", "fold"])
+
+    df_mean = df.groupby(
+        ["model_type", "model_name"]
+    ).agg(
+        Dice_mean=("Dice", "mean"),
+        Dice_std=("Dice", "std"),
+        F1_mean=("F1", "mean"),
+        F1_std=("F1", "std"),
+        NSD_mean=("NSD", "mean"),
+        NSD_std=("NSD", "std"),
+    ).reset_index()
+    df_mean = df_mean.sort_values(["model_type", "model_name"])
+
+    importance_rows = []
+    for _, row in df_mean.iterrows():
+        model_name = row["model_name"]
+        if "zero_input_channel" not in model_name:
+            continue
+        dataset_match = re.search(r"(Dataset\d+)", model_name)
+        if not dataset_match:
+            continue
+        dataset_id = dataset_match.group(1)
+        if dataset_id not in BASE_MODELS:
+            continue
+        full_model = BASE_MODELS[dataset_id]
+        full_row = df_mean[
+            (df_mean.model_name == full_model) &
+            (df_mean.model_type == "full_model")
+        ]
+        if full_row.empty:
+            continue
+        full_dice = full_row.iloc[0]["Dice_mean"]
+        zero_dice = row["Dice_mean"]
+        drop = full_dice - zero_dice
+        channel_match = re.search(r"zero_input_channel_(.*)", model_name)
+        channel = channel_match.group(1) if channel_match else model_name
+        importance_rows.append({
+            "channel": channel,
+            "dataset": dataset_id,
+            "Dice_drop": drop,
+            "full_model_dice": full_dice,
+            "zero_input_dice": zero_dice,
+        })
+
+    importance_df = pd.DataFrame(importance_rows)
+    if not importance_df.empty:
+        importance_df = importance_df.sort_values("Dice_drop", ascending=False)
+
+    return df, df_mean, importance_df
+
+
+def save_feature_importance_outputs(threshold_label, analysis_name, df, df_mean, importance_df):
+    threshold_dir = os.path.join(OUTPUT_DIR, "feature_importance", threshold_label)
+    images_dir = os.path.join(threshold_dir, "images")
+    os.makedirs(images_dir, exist_ok=True)
+
+    results_csv = os.path.join(threshold_dir, "results_all_folds.csv")
+    mean_csv = os.path.join(threshold_dir, "results_model_means.csv")
+    importance_csv = os.path.join(threshold_dir, "feature_importance.csv")
+    summary_xlsx = os.path.join(threshold_dir, "feature_importance_summary.xlsx")
+
+    df.to_csv(results_csv, index=False)
+    df_mean.to_csv(mean_csv, index=False)
+    importance_df.to_csv(importance_csv, index=False)
+
+    with pd.ExcelWriter(summary_xlsx) as writer:
+        df.to_excel(writer, sheet_name="all_folds", index=False)
+        df_mean.to_excel(writer, sheet_name="model_means", index=False)
+        importance_df.to_excel(writer, sheet_name="feature_importance", index=False)
+
+    print(f"Saved feature importance tables for {threshold_label}: {threshold_dir}")
+
+    if importance_df is None or importance_df.empty:
+        return
+
+    datasets = importance_df["dataset"].unique()
+    for dataset in datasets:
+        subset = importance_df[importance_df["dataset"] == dataset].sort_values("Dice_drop", ascending=False)
+        plt.figure(figsize=(8, 5))
+        plt.bar(subset["channel"], subset["Dice_drop"])
+        plt.ylabel("Dice drop (importance)")
+        plt.xlabel("Removed channel")
+        plt.title(f"Channel importance ({threshold_label} — {dataset})")
+        plt.xticks(rotation=45)
+        plt.tight_layout()
+        plot_path = os.path.join(images_dir, f"feature_importance_{threshold_label}_{dataset}.png")
+        plt.savefig(plot_path, dpi=300)
+        plt.close()
+        print(f"Saved: {plot_path}")
+
+    label_map = {
+        "Dataset708": "All together (708)",
+        "Dataset717": "All VMI (717)",
+        "Dataset718": "All CaSupp (718)",
+    }
+    heatmap_df = importance_df.pivot_table(
+        index="channel",
+        columns="dataset",
+        values="Dice_drop"
+    )
+    heatmap_df = heatmap_df.rename(columns=label_map)
+    plt.figure(figsize=(6, 6))
+    sns.heatmap(
+        heatmap_df,
+        annot=True,
+        cmap="viridis",
+        fmt=".3f",
+        linewidths=0.5,
+    )
+    plt.title(f"Channel importance heatmap ({threshold_label})")
+    plt.ylabel("Removed channel")
+    plt.xlabel("Dataset")
+    plt.tight_layout()
+    heatmap_path = os.path.join(images_dir, f"feature_importance_heatmap_{threshold_label}.png")
+    plt.savefig(heatmap_path, dpi=300, bbox_inches="tight")
+    plt.close()
+    print(f"Saved: {heatmap_path}")
 
 
 def save_longi_plots(df):
@@ -307,6 +472,13 @@ def main():
     threshold_df = load_threshold_patient_rows()
     threshold_df.to_csv(os.path.join(OUTPUT_DIR, "threshold_comparison_per_patient_values.csv"), index=False)
     save_threshold_plots(threshold_df)
+
+    for threshold_label, analysis_name in ANALYSES.items():
+        df, df_mean, importance_df = compute_feature_importance(analysis_name)
+        if df is None:
+            print(f"No feature importance results for threshold: {threshold_label}")
+            continue
+        save_feature_importance_outputs(threshold_label, analysis_name, df, df_mean, importance_df)
 
     longi_df = load_longi_patient_rows()
     longi_df.to_csv(os.path.join(OUTPUT_DIR, "longi_summary_all_per_patient_values.csv"), index=False)
