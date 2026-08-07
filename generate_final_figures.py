@@ -350,11 +350,21 @@ def compute_feature_importance(analysis_name):
             "F1_drop": f1_drop,
             "full_model_dice": full_dice,
             "zero_input_dice": zero_dice,
+            "full_model_f1": full_f1,
+            "zero_input_f1": zero_f1,
         })
 
     importance_df = pd.DataFrame(importance_rows)
     if not importance_df.empty:
-        importance_df = importance_df.sort_values("Dice_drop", ascending=False)
+        # rename channel column to clarify it's the zero-input channel
+        if "channel" in importance_df.columns:
+            importance_df = importance_df.rename(columns={"channel": "zero_input_channel"})
+        # sort by dataset first, then by Dice_drop descending
+        sort_cols = ["dataset", "Dice_drop"]
+        importance_df = importance_df.sort_values(sort_cols, ascending=[True, False])
+        # ensure dataset is first column and zero_input_channel second
+        cols = [c for c in importance_df.columns if c not in ("dataset", "zero_input_channel")]
+        importance_df = importance_df[["dataset", "zero_input_channel"] + cols]
 
     return df, df_mean, importance_df
 
@@ -384,17 +394,18 @@ def save_feature_importance_outputs(threshold_label, analysis_name, df, df_mean,
         return
 
     datasets = importance_df["dataset"].unique()
+
     for dataset in datasets:
         subset = importance_df[importance_df["dataset"] == dataset].sort_values("Dice_drop", ascending=False)
         plt.figure(figsize=(8, 5))
-        plt.bar(subset["channel"], subset["Dice_drop"])
+        plt.bar(subset["zero_input_channel"], subset["Dice_drop"])
         plt.ylabel("Dice drop (importance)")
         plt.xlabel("Removed channel")
         plt.title(f"Channel importance ({threshold_label} — {dataset})")
         plt.xticks(rotation=45)
         plt.tight_layout()
         plot_path = os.path.join(images_dir, f"feature_importance_{threshold_label}_{dataset}.png")
-        plt.savefig(plot_path, dpi=600)
+        #plt.savefig(plot_path, dpi=600)
         plt.close()
         print(f"Saved: {plot_path}")
 
@@ -406,12 +417,12 @@ def save_feature_importance_outputs(threshold_label, analysis_name, df, df_mean,
 
     # pivot tables for Dice and F1 drops
     dice_heatmap_df = importance_df.pivot_table(
-        index="channel",
+        index="zero_input_channel",
         columns="dataset",
         values="Dice_drop"
     )
     f1_heatmap_df = importance_df.pivot_table(
-        index="channel",
+        index="zero_input_channel",
         columns="dataset",
         values="F1_drop"
     )
@@ -450,7 +461,7 @@ def save_feature_importance_outputs(threshold_label, analysis_name, df, df_mean,
         linewidths=0.5,
         cbar_kws={"label": "Dice drop"},
     )
-    plt.title(f"Channel importance heatmap (Dice drop) — {threshold_label}")
+    plt.title(f"Channel importance heatmap — Dice drop")
     plt.ylabel("Removed channel")
     plt.xlabel("Dataset")
     plt.tight_layout()
@@ -469,7 +480,7 @@ def save_feature_importance_outputs(threshold_label, analysis_name, df, df_mean,
         linewidths=0.5,
         cbar_kws={"label": "F1 drop"},
     )
-    plt.title(f"Channel importance heatmap (F1 drop) — {threshold_label}")
+    plt.title(f"Channel importance heatmap — F1 drop")
     plt.ylabel("Removed channel")
     plt.xlabel("Dataset")
     plt.tight_layout()
