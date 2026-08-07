@@ -334,13 +334,20 @@ def compute_feature_importance(analysis_name):
             continue
         full_dice = full_row.iloc[0]["Dice_mean"]
         zero_dice = row["Dice_mean"]
+        # Dice importance (drop)
         drop = full_dice - zero_dice
+
+        # Also compute detection performance drop (F1)
+        full_f1 = full_row.iloc[0]["F1_mean"]
+        zero_f1 = row["F1_mean"]
+        f1_drop = full_f1 - zero_f1
         channel_match = re.search(r"zero_input_channel_(.*)", model_name)
         channel = channel_match.group(1) if channel_match else model_name
         importance_rows.append({
             "channel": channel,
             "dataset": dataset_id,
             "Dice_drop": drop,
+            "F1_drop": f1_drop,
             "full_model_dice": full_dice,
             "zero_input_dice": zero_dice,
         })
@@ -396,28 +403,80 @@ def save_feature_importance_outputs(threshold_label, analysis_name, df, df_mean,
         "Dataset717": "All VMI (717)",
         "Dataset718": "All CaSupp (718)",
     }
-    heatmap_df = importance_df.pivot_table(
+
+    # pivot tables for Dice and F1 drops
+    dice_heatmap_df = importance_df.pivot_table(
         index="channel",
         columns="dataset",
         values="Dice_drop"
     )
-    heatmap_df = heatmap_df.rename(columns=label_map)
+    f1_heatmap_df = importance_df.pivot_table(
+        index="channel",
+        columns="dataset",
+        values="F1_drop"
+    )
+
+    # rename dataset columns to friendly labels
+    dice_heatmap_df = dice_heatmap_df.rename(columns=label_map)
+    f1_heatmap_df = f1_heatmap_df.rename(columns=label_map)
+
+    # save pivot matrices
+    dice_csv = os.path.join(threshold_dir, "feature_importance_heatmap_Dice.csv")
+    f1_csv = os.path.join(threshold_dir, "feature_importance_heatmap_F1.csv")
+    dice_heatmap_df.to_csv(dice_csv)
+    f1_heatmap_df.to_csv(f1_csv)
+
+    # append heatmap sheets to the summary workbook
+    try:
+        with pd.ExcelWriter(summary_xlsx, mode="a", if_sheet_exists="replace") as writer:
+            dice_heatmap_df.to_excel(writer, sheet_name="heatmap_Dice")
+            f1_heatmap_df.to_excel(writer, sheet_name="heatmap_F1")
+    except Exception:
+        # fallback: write a new workbook with the extra sheets (overwrites)
+        with pd.ExcelWriter(summary_xlsx) as writer:
+            df.to_excel(writer, sheet_name="all_folds", index=False)
+            df_mean.to_excel(writer, sheet_name="model_means", index=False)
+            importance_df.to_excel(writer, sheet_name="feature_importance", index=False)
+            dice_heatmap_df.to_excel(writer, sheet_name="heatmap_Dice")
+            f1_heatmap_df.to_excel(writer, sheet_name="heatmap_F1")
+
+    # plot Dice heatmap with colorbar
     plt.figure(figsize=(6, 6))
     sns.heatmap(
-        heatmap_df,
+        dice_heatmap_df,
         annot=True,
         cmap="viridis",
         fmt=".3f",
         linewidths=0.5,
+        cbar_kws={"label": "Dice drop"},
     )
-    plt.title(f"Channel importance heatmap ({threshold_label})")
+    plt.title(f"Channel importance heatmap (Dice drop) — {threshold_label}")
     plt.ylabel("Removed channel")
     plt.xlabel("Dataset")
     plt.tight_layout()
-    heatmap_path = os.path.join(images_dir, f"feature_importance_heatmap_{threshold_label}.png")
+    heatmap_path = os.path.join(images_dir, f"feature_importance_heatmap_{threshold_label}_Dice.png")
     plt.savefig(heatmap_path, dpi=600, bbox_inches="tight")
     plt.close()
     print(f"Saved: {heatmap_path}")
+
+    # plot F1 heatmap with colorbar
+    plt.figure(figsize=(6, 6))
+    sns.heatmap(
+        f1_heatmap_df,
+        annot=True,
+        cmap="viridis",
+        fmt=".3f",
+        linewidths=0.5,
+        cbar_kws={"label": "F1 drop"},
+    )
+    plt.title(f"Channel importance heatmap (F1 drop) — {threshold_label}")
+    plt.ylabel("Removed channel")
+    plt.xlabel("Dataset")
+    plt.tight_layout()
+    heatmap_path_f1 = os.path.join(images_dir, f"feature_importance_heatmap_{threshold_label}_F1.png")
+    plt.savefig(heatmap_path_f1, dpi=600, bbox_inches="tight")
+    plt.close()
+    print(f"Saved: {heatmap_path_f1}")
 
 
 def save_longi_plots(df):
@@ -438,7 +497,7 @@ def save_longi_plots(df):
         order = [f"Dataset_{d}" for d in ids]
         subset["dataset_label"] = pd.Categorical(subset["dataset_label"], categories=order, ordered=True)
         for metric in METRICS:
-            fig, ax = plt.subplots(figsize=(12, 6))
+            fig, ax = plt.subplots(figsize=(12, 5))
             palette = [
                 GROUP_COLORS.get(DATASET_GROUP.get(dataset_id, "LOO"), "#4C78A8")
                 for dataset_id in ids
