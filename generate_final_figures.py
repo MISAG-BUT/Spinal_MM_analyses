@@ -12,7 +12,7 @@ from matplotlib.patches import Patch
 ROOT = "/home/nohel/DATA/MultipleMyeloma_analyses"
 ANALYSIS = "longi_summary_all"
 JSON_ROOT = os.path.join(ROOT, "full_models", ANALYSIS)
-OUTPUT_DIR = os.path.join(ROOT, "results", "figures_final")
+OUTPUT_DIR = os.path.join(ROOT, "results", "figures_final_new")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 ANALYSES = {
@@ -34,6 +34,28 @@ BASE_MODELS = {
     "Dataset708": "Dataset708_MM_Lesion_seg_all_together",
     "Dataset717": "Dataset717_MM_Lesion_seg_all_VMI",
     "Dataset718": "Dataset718_MM_Lesion_seg_all_CaSupp",
+}
+
+DATASET_LABELS = {
+    700: "LOO w/o ConvCT (700)",
+    701: "LOO w/o VMI40 (701)",
+    702: "LOO w/o VMI80 (702)",
+    703: "LOO w/o VMI120 (703)",
+    704: "LOO w/o CaSupp25 (704)",
+    705: "LOO w/o CaSupp50 (705)",
+    706: "LOO w/o CaSupp75 (706)",
+    707: "LOO w/o CaSupp100 (707)",
+    708: "All together (708)",
+    709: "ConvCT (709)",
+    710: "VMI40 (710)",
+    711: "VMI80 (711)",
+    712: "VMI120 (712)",
+    713: "CaSupp25 (713)",
+    714: "CaSupp50 (714)",
+    715: "CaSupp75 (715)",
+    716: "CaSupp100 (716)",
+    717: "All VMI (717)",
+    718: "All CaSupp (718)",
 }
 
 METRICS = ["Dice", "F1", "NSD"]
@@ -354,7 +376,7 @@ def save_feature_importance_outputs(threshold_label, analysis_name, df, df_mean,
         plt.xticks(rotation=45)
         plt.tight_layout()
         plot_path = os.path.join(images_dir, f"feature_importance_{threshold_label}_{dataset}.png")
-        plt.savefig(plot_path, dpi=300)
+        plt.savefig(plot_path, dpi=600)
         plt.close()
         print(f"Saved: {plot_path}")
 
@@ -382,7 +404,7 @@ def save_feature_importance_outputs(threshold_label, analysis_name, df, df_mean,
     plt.xlabel("Dataset")
     plt.tight_layout()
     heatmap_path = os.path.join(images_dir, f"feature_importance_heatmap_{threshold_label}.png")
-    plt.savefig(heatmap_path, dpi=300, bbox_inches="tight")
+    plt.savefig(heatmap_path, dpi=600, bbox_inches="tight")
     plt.close()
     print(f"Saved: {heatmap_path}")
 
@@ -440,7 +462,18 @@ def save_longi_plots(df):
             ax.set_ylabel(metric)
             ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha="right")
             ax.grid(axis="y", linestyle="--", alpha=0.3)
-            plt.tight_layout()
+
+            legend_handles = [Patch(facecolor="white", edgecolor="black", label=DATASET_LABELS.get(dataset_id, f"{dataset_id}")) for dataset_id in ids]
+            if legend_handles:
+                ax.legend(
+                    handles=legend_handles,
+                    title="Dataset",
+                    loc="upper left",
+                    bbox_to_anchor=(1.02, 1.0),
+                    frameon=False,
+                )
+
+            plt.tight_layout(rect=[0, 0, 0.78, 1])
             out_path = os.path.join(OUTPUT_DIR, "longi_summary_all", f"{prefix}_{metric}_boxplot.png")
             plt.savefig(out_path, dpi=600, bbox_inches="tight")
             plt.close(fig)
