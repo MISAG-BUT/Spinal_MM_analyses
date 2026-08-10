@@ -12,7 +12,7 @@ from matplotlib.patches import Patch
 ROOT = "/home/nohel/DATA/MultipleMyeloma_analyses"
 ANALYSIS = "longi_summary_all"
 JSON_ROOT = os.path.join(ROOT, "full_models", ANALYSIS)
-OUTPUT_DIR = os.path.join(ROOT, "results", "figures_final_new")
+OUTPUT_DIR = os.path.join(ROOT, "results", "figures_final_new_2")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 ANALYSES = {
@@ -453,12 +453,16 @@ def save_feature_importance_outputs(threshold_label, analysis_name, df, df_mean,
 
     # plot Dice heatmap with colorbar
     plt.figure(figsize=(6, 6))
+    dice_cbar_min = dice_heatmap_df.min().min()
+    dice_cbar_max = dice_heatmap_df.max().max()
     sns.heatmap(
         dice_heatmap_df,
         annot=True,
         cmap="viridis",
         fmt=".3f",
         linewidths=0.5,
+        vmin=dice_cbar_min,
+        vmax=dice_cbar_max,
         cbar_kws={"label": "Dice drop"},
     )
     plt.title(f"Channel importance heatmap — Dice drop")
@@ -470,7 +474,7 @@ def save_feature_importance_outputs(threshold_label, analysis_name, df, df_mean,
     plt.close()
     print(f"Saved: {heatmap_path}")
 
-    # plot F1 heatmap with colorbar
+    # plot F1 heatmap with same color range as Dice heatmap
     plt.figure(figsize=(6, 6))
     sns.heatmap(
         f1_heatmap_df,
@@ -478,6 +482,8 @@ def save_feature_importance_outputs(threshold_label, analysis_name, df, df_mean,
         cmap="viridis",
         fmt=".3f",
         linewidths=0.5,
+        vmin=dice_cbar_min,
+        vmax=dice_cbar_max,
         cbar_kws={"label": "F1 drop"},
     )
     plt.title(f"Channel importance heatmap — F1 drop")
