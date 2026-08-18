@@ -67,7 +67,7 @@ DATASET_GROUP = {
     705: "LOO",
     706: "LOO",
     707: "LOO",
-    708: "Grouped",
+    708: "All together",
     709: "ConvCT",
     710: "VMI",
     711: "VMI",
@@ -76,16 +76,16 @@ DATASET_GROUP = {
     714: "CaSupp",
     715: "CaSupp",
     716: "CaSupp",
-    717: "Grouped",
-    718: "Grouped",
+    717: "VMI",
+    718: "CaSupp",
 }
 
 GROUP_COLORS = {
-    "LOO": "#4C78A8",
+    "LOO": "#72B0F1",
     "ConvCT": "#ff7f0e",
     "VMI": "#2ca02c",
     "CaSupp": "#d62728",
-    "Grouped": "#9467bd",
+    "All together": "#9467bd",
 }
 
 METRICS = ["Dice", "F1", "NSD"]
@@ -501,7 +501,7 @@ def save_longi_plots(df):
     groups = [
         (list(range(700, 719)), "models_700_718", "models 700–718"),
         (list(range(709, 717)), "single_input_709_716", "single-input models 709–716"),
-        (list(range(700, 708)), "leave_one_out_700_707", "leave-one-out models 700–707"),
+        (list(range(700, 709)), "leave_one_out_700_708", "leave-one-out models 700–708"),
         ([708, 717, 718], "grouped_708_717_718", "grouped datasets 708, 717, 718"),
     ]
 
@@ -548,17 +548,36 @@ def save_longi_plots(df):
             ax.set_title(f"{metric} — {title}")
             ax.set_xlabel("Model")
             ax.set_ylabel(metric)
-            ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha="right")
+
+            xtick_labels = []
+            for label in order:
+                match = re.search(r"Dataset_(\d+)", label)
+                if match:
+                    dataset_id = int(match.group(1))
+                    xtick_labels.append(DATASET_LABELS.get(dataset_id, label))
+                else:
+                    xtick_labels.append(label)
+            ax.set_xticklabels(xtick_labels, rotation=45, ha="right", fontsize=8)
             ax.grid(axis="y", linestyle="--", alpha=0.3)
+
+            legend_groups = {}
+            for dataset_id in ids:
+                group = DATASET_GROUP.get(dataset_id, "LOO")
+                if dataset_id == 717:
+                    group = "VMI"
+                elif dataset_id == 718:
+                    group = "CaSupp"
+                legend_groups[group] = GROUP_COLORS.get(group, "#4C78A8")
 
             dataset_handles = [
                 Patch(
-                    facecolor=GROUP_COLORS.get(DATASET_GROUP.get(dataset_id, "LOO"), "#4C78A8"),
+                    facecolor=color,
                     edgecolor="black",
-                    label=DATASET_LABELS.get(dataset_id, f"Dataset {dataset_id}"),
+                    label=group,
                 )
-                for dataset_id in ids
+                for group, color in legend_groups.items()
             ]
+
             if dataset_handles:
                 ax.legend(
                     handles=dataset_handles,
@@ -572,6 +591,119 @@ def save_longi_plots(df):
             out_path = os.path.join(OUTPUT_DIR, "longi_summary_all", f"{prefix}_{metric}_boxplot.png")
             plt.savefig(out_path, dpi=600, bbox_inches="tight")
             plt.close(fig)
+
+
+def save_loo_difference_plots(df):
+    """
+    Create difference plots: LOO models (700-707) minus GT (708).
+    For each case_id, compute: LOO_value - GT_value
+    """
+    os.makedirs(os.path.join(OUTPUT_DIR, "loo_difference_from_gt"), exist_ok=True)
+    
+    # Filter for LOO models (700-707) and GT (708)
+    loo_ids = list(range(700, 708))  # 700-707
+    gt_id = 708
+    
+    df_filtered = df[df["dataset_id"].isin(loo_ids + [gt_id])].copy()
+    
+    if df_filtered.empty:
+        print("Warning: No LOO or GT data found")
+        return
+    
+    # Get GT data
+    gt_data = df_filtered[df_filtered["dataset_id"] == gt_id][["case_id", "Dice", "F1", "NSD"]].copy()
+    gt_data = gt_data.rename(columns={"Dice": "GT_Dice", "F1": "GT_F1", "NSD": "GT_NSD"})
+    
+    # Process LOO models
+    difference_rows = []
+    for loo_id in loo_ids:
+        loo_data = df_filtered[df_filtered["dataset_id"] == loo_id][["case_id", "dataset_id", "dataset_label", "Dice", "F1", "NSD"]].copy()
+        
+        # Merge with GT data
+        merged = loo_data.merge(gt_data, on="case_id", how="inner")
+        
+        # Compute differences (LOO - GT)
+        merged["Dice_diff"] = merged["Dice"] - merged["GT_Dice"]
+        merged["F1_diff"] = merged["F1"] - merged["GT_F1"]
+        merged["NSD_diff"] = merged["NSD"] - merged["GT_NSD"]
+        
+        difference_rows.append(merged)
+    
+    diff_df = pd.concat(difference_rows, ignore_index=True)
+    
+    if diff_df.empty:
+        print("Warning: No matching case_ids between LOO and GT")
+        return
+    
+    # Save difference data
+    diff_csv = os.path.join(OUTPUT_DIR, "loo_difference_from_gt", "loo_vs_gt_differences.csv")
+    diff_df.to_csv(diff_csv, index=False)
+    print(f"Saved LOO vs GT differences: {diff_csv}")
+    
+    # Create plots
+    order = [f"Dataset_{d}" for d in loo_ids]
+    diff_df["dataset_label"] = pd.Categorical(diff_df["dataset_label"], categories=order, ordered=True)
+    
+    for metric in ["Dice_diff", "F1_diff", "NSD_diff"]:
+        fig, ax = plt.subplots(figsize=(12, 6))
+        
+        palette = [
+            GROUP_COLORS.get("LOO", "#72B0F1")
+            for _ in loo_ids
+        ]
+        
+        sns.boxplot(
+            data=diff_df,
+            x="dataset_label",
+            y=metric,
+            order=order,
+            palette=palette,
+            ax=ax,
+            showfliers=False,
+        )
+        
+        # Format artist
+        for i, artist in enumerate(ax.artists):
+            artist.set_edgecolor("black")
+            artist.set_alpha(0.9)
+        
+        # Add mean markers
+        means = diff_df.groupby("dataset_label")[metric].mean()
+        for i, value in enumerate(means.reindex(order).tolist()):
+            ax.scatter([i], [value], marker="x", color="red", s=120, zorder=3, linewidths=1.8, label="Mean" if i == 0 else "")
+        
+        # Add individual points
+        sns.stripplot(
+            data=diff_df,
+            x="dataset_label",
+            y=metric,
+            order=order,
+            ax=ax,
+            color="black",
+            alpha=0.35,
+            size=3,
+            jitter=0.1,
+        )
+        
+        # Labels and formatting
+        metric_name = metric.replace("_diff", "")
+        ax.set_title(f"{metric_name} difference (LOO - GT)")
+        ax.set_xlabel("LOO Model")
+        ax.set_ylabel(f"{metric_name} difference")
+        
+        # Set x-axis labels to friendly names
+        xtick_labels = [DATASET_LABELS.get(loo_ids[i], f"Dataset_{loo_ids[i]}") for i in range(len(loo_ids))]
+        ax.set_xticklabels(xtick_labels, rotation=45, ha="right", fontsize=8)
+        
+        # Add zero line
+        ax.axhline(y=0, color="gray", linestyle="--", linewidth=1, alpha=0.7)
+        ax.grid(axis="y", linestyle="--", alpha=0.3)
+        
+        plt.tight_layout()
+        out_path = os.path.join(OUTPUT_DIR, "loo_difference_from_gt", f"loo_vs_gt_{metric_name}_diff.png")
+        plt.savefig(out_path, dpi=600, bbox_inches="tight")
+        plt.close(fig)
+        print(f"Saved: {out_path}")
 
 def main():
     threshold_df = load_threshold_patient_rows()
@@ -588,8 +720,12 @@ def main():
     longi_df = load_longi_patient_rows()
     longi_df.to_csv(os.path.join(OUTPUT_DIR, "longi_summary_all_per_patient_values.csv"), index=False)
     save_longi_plots(longi_df)
+    
+    # Generate LOO difference plots
+    save_loo_difference_plots(longi_df)
 
     print(f"Saved final figures to: {OUTPUT_DIR}")
+
 
 
 if __name__ == "__main__":
