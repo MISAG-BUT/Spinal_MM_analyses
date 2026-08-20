@@ -427,6 +427,32 @@ def save_feature_importance_outputs(threshold_label, analysis_name, df, df_mean,
         values="F1_drop"
     )
 
+    channel_patterns = [
+        (r"conv\s*[_-]?\s*ct", 0),
+        (r"vmi\s*[_-]?\s*40", 1),
+        (r"vmi\s*[_-]?\s*80", 2),
+        (r"vmi\s*[_-]?\s*120", 3),
+        (r"ca\s*[_-]?\s*supp\s*[_-]?\s*25", 4),
+        (r"ca\s*[_-]?\s*supp\s*[_-]?\s*50", 5),
+        (r"ca\s*[_-]?\s*supp\s*[_-]?\s*75", 6),
+        (r"ca\s*[_-]?\s*supp\s*[_-]?\s*100", 7),
+    ]
+
+    def channel_order(channel):
+        channel_text = str(channel).lower()
+        for pattern, order in channel_patterns:
+            if re.search(pattern, channel_text):
+                return order
+        return len(channel_patterns)
+
+    ordered_channels = sorted(
+        dice_heatmap_df.index,
+        key=channel_order,
+        reverse=True,
+    )
+    dice_heatmap_df = dice_heatmap_df.reindex(ordered_channels)
+    f1_heatmap_df = f1_heatmap_df.reindex(ordered_channels)
+
     # rename dataset columns to friendly labels
     dice_heatmap_df = dice_heatmap_df.rename(columns=label_map)
     f1_heatmap_df = f1_heatmap_df.rename(columns=label_map)
