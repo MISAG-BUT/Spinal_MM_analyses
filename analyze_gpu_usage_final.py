@@ -11,7 +11,7 @@ GPU_LOG_DIR = os.path.join(ROOT, "gpu_logs")
 TIME_LOG = os.path.join(ROOT, "inference_time_log.csv")
 
 # output directory
-OUTPUT_DIR = os.path.join(ROOT, "gpu_analyses_results")
+OUTPUT_DIR = os.path.join(ROOT, "gpu_analyses_results2")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 OUTPUT_FILE = os.path.join(OUTPUT_DIR, "gpu_usage_summary.csv")
@@ -26,7 +26,8 @@ time_df = pd.read_csv(TIME_LOG)
 time_df = time_df.rename(columns={
     "MODEL": "model",
     "FOLD": "fold",
-    "DURATION_SEC": "runtime_sec"
+    "DURATION_SEC": "runtime_sec",
+    "PARAMETERS": "parameters"
 })
 
 ############################################
@@ -84,7 +85,7 @@ gpu_df = pd.DataFrame(rows)
 ############################################
 
 merged = gpu_df.merge(
-    time_df[["model", "fold", "runtime_sec"]],
+    time_df[["model", "fold", "runtime_sec", "parameters"]],
     on=["model", "fold"],
     how="left"
 )
@@ -103,6 +104,7 @@ print("Saved:", OUTPUT_FILE)
 model_summary = merged.groupby("model").agg({
 
     "runtime_sec": "mean",
+    "parameters": "mean",
     "avg_gpu_util_percent": "mean",
     "max_gpu_util_percent": "max",
     "avg_memory_MiB": "mean",
