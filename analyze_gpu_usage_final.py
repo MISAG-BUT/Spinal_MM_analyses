@@ -1,4 +1,7 @@
 import os
+import json
+import glob
+import re
 import pandas as pd
 
 ############################################
@@ -6,16 +9,19 @@ import pandas as pd
 ############################################
 
 ROOT = "/home/nohel/DATA/MultipleMyeloma_analyses"
+TRAINING_RESULTS_ROOT = "/home/nohel/DATA/nnUNet_results"
 
 GPU_LOG_DIR = os.path.join(ROOT, "gpu_logs")
 TIME_LOG = os.path.join(ROOT, "inference_time_log.csv")
 
 # output directory
-OUTPUT_DIR = os.path.join(ROOT, "gpu_analyses_results2")
+OUTPUT_DIR = os.path.join(ROOT, "gpu_analyses_results")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 OUTPUT_FILE = os.path.join(OUTPUT_DIR, "gpu_usage_summary.csv")
 SUMMARY_FILE = os.path.join(OUTPUT_DIR, "gpu_usage_model_means.csv")
+TRAINING_GPU_FILE = os.path.join(OUTPUT_DIR, "training_gpu_usage.csv")
+TRAINING_GPU_SUMMARY_FILE = os.path.join(OUTPUT_DIR, "training_gpu_usage_summary.csv")
 
 ############################################
 # LOAD RUNTIME LOG
@@ -120,3 +126,59 @@ model_summary = model_summary.sort_values(by="model").reset_index(drop=True)
 model_summary.to_csv(SUMMARY_FILE, index=False)
 
 print("Saved:", SUMMARY_FILE)
+
+############################################
+# LOAD GPU TYPES USED DURING TRAINING
+############################################
+
+training_gpu_rows = []
+
+for dataset_id in range(700, 719):
+    model_pattern = os.path.join(
+        TRAINING_RESULTS_ROOT,
+        f"Dataset{dataset_id}_MM_Lesion_seg_*",
+        "nnUNetTrainer__nnUNetPlans__3d_fullres",
+        "fold_*",
+        "debug.json",
+    )
+
+    for debug_file in sorted(glob.glob(model_pattern)):
+        fold_match = re.search(r"/fold_(\d+)/debug\.json$", debug_file)
+        if not fold_match:
+            continue
+
+        fold = int(fold_match.group(1))
+        if fold not in range(5):
+            continue
+
+        model_dir = os.path.dirname(os.path.dirname(debug_file))
+        model = os.path.basename(os.path.dirname(model_dir))
+
+        with open(debug_file) as fh:
+            debug_data = json.load(fh)
+
+        training_gpu_rows.append({
+            "dataset_id": dataset_id,
+            "model": model,
+            "fold": fold,
+            "gpu_name": debug_data.get("gpu_name"),
+            "debug_file": debug_file,
+        })
+
+training_gpu_df = pd.DataFrame(training_gpu_rows)
+training_gpu_df = training_gpu_df.sort_values(
+    by=["dataset_id", "model", "fold"]
+).reset_index(drop=True)
+training_gpu_df.to_csv(TRAINING_GPU_FILE, index=False)
+
+training_gpu_summary = (
+    training_gpu_df.groupby(["dataset_id", "model", "gpu_name"], dropna=False)
+    .agg(folds=("fold", "nunique"))
+    .reset_index()
+    .sort_values(by=["dataset_id", "model", "gpu_name"])
+    .reset_index(drop=True)
+)
+training_gpu_summary.to_csv(TRAINING_GPU_SUMMARY_FILE, index=False)
+
+print("Saved:", TRAINING_GPU_FILE)
+print("Saved:", TRAINING_GPU_SUMMARY_FILE)
