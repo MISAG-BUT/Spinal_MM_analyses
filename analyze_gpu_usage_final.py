@@ -20,6 +20,7 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 OUTPUT_FILE = os.path.join(OUTPUT_DIR, "gpu_usage_summary.csv")
 SUMMARY_FILE = os.path.join(OUTPUT_DIR, "gpu_usage_model_means.csv")
+ARTICLE_SUMMARY_FILE = os.path.join(OUTPUT_DIR, "gpu_usage_article_summary.csv")
 TRAINING_GPU_FILE = os.path.join(OUTPUT_DIR, "training_gpu_usage.csv")
 TRAINING_GPU_SUMMARY_FILE = os.path.join(OUTPUT_DIR, "training_gpu_usage_summary.csv")
 
@@ -128,6 +129,59 @@ model_summary.to_csv(SUMMARY_FILE, index=False)
 print("Saved:", SUMMARY_FILE)
 
 ############################################
+# ARTICLE SUMMARY BY MODEL GROUP
+############################################
+
+article_metrics = [
+    "runtime_sec",
+    "avg_gpu_util_percent",
+    "max_gpu_util_percent",
+    "avg_memory_MiB",
+    "max_memory_MiB",
+    "avg_power_W",
+    "energy_Wh",
+]
+
+article_summary_rows = []
+article_groups = {
+    "LOO (700-707)": set(range(700, 708)),
+    "All together (708)": {708},
+    "Single input (709-716)": set(range(709, 717)),
+    "All VMI (717)": {717},
+    "All CaSupp (718)": {718},
+}
+
+article_source = merged[
+    ~merged["model"].astype(str).str.contains("zero.?input", case=False, regex=True, na=False)
+].copy()
+article_source["dataset_id"] = article_source["model"].str.extract(r"Dataset(\d+)")[0].astype(float)
+
+for group_name, dataset_ids in article_groups.items():
+    group_data = article_source[article_source["dataset_id"].isin(dataset_ids)]
+    if group_data.empty:
+        continue
+
+    summary_row = {"model_group": group_name}
+    parameter_values = pd.to_numeric(group_data["parameters"], errors="coerce").dropna()
+    summary_row["parameters"] = parameter_values.median() if not parameter_values.empty else None
+    for metric in article_metrics:
+        values = pd.to_numeric(group_data[metric], errors="coerce").dropna()
+        if values.empty:
+            summary_row[f"{metric}_median"] = None
+            summary_row[f"{metric}_range_min"] = None
+            summary_row[f"{metric}_range_max"] = None
+        else:
+            summary_row[f"{metric}_median"] = values.median()
+            summary_row[f"{metric}_range_min"] = values.min()
+            summary_row[f"{metric}_range_max"] = values.max()
+    article_summary_rows.append(summary_row)
+
+article_summary = pd.DataFrame(article_summary_rows).round(3)
+article_summary.to_csv(ARTICLE_SUMMARY_FILE, index=False)
+
+print("Saved:", ARTICLE_SUMMARY_FILE)
+
+############################################
 # LOAD GPU TYPES USED DURING TRAINING
 ############################################
 
@@ -151,18 +205,29 @@ for dataset_id in range(700, 719):
         if fold not in range(5):
             continue
 
-        model_dir = os.path.dirname(os.path.dirname(debug_file))
-        model = os.path.basename(os.path.dirname(model_dir))
+        fold_dir = os.path.dirname(debug_file)
+        model_dir = os.path.dirname(os.path.dirname(fold_dir))
+        model = os.path.basename(model_dir)
 
         with open(debug_file) as fh:
             debug_data = json.load(fh)
+
+        epoch_times = []
+        for training_log in sorted(glob.glob(os.path.join(fold_dir, "training_log_*.txt"))):
+            with open(training_log) as fh:
+                log_text = fh.read()
+            epoch_times.extend(
+                float(value)
+                for value in re.findall(r"Epoch time:\s*([0-9]+(?:\.[0-9]+)?)\s*s", log_text)
+            )
 
         training_gpu_rows.append({
             "dataset_id": dataset_id,
             "model": model,
             "fold": fold,
             "gpu_name": debug_data.get("gpu_name"),
-            "debug_file": debug_file,
+            "mean_epoch_time_sec": sum(epoch_times) / len(epoch_times) if epoch_times else None,
+            "epoch_count": len(epoch_times),
         })
 
 training_gpu_df = pd.DataFrame(training_gpu_rows)
@@ -173,7 +238,11 @@ training_gpu_df.to_csv(TRAINING_GPU_FILE, index=False)
 
 training_gpu_summary = (
     training_gpu_df.groupby(["dataset_id", "model", "gpu_name"], dropna=False)
-    .agg(folds=("fold", "nunique"))
+    .agg(
+        folds=("fold", "nunique"),
+        mean_epoch_time_sec=("mean_epoch_time_sec", "mean"),
+        epoch_count=("epoch_count", "sum"),
+    )
     .reset_index()
     .sort_values(by=["dataset_id", "model", "gpu_name"])
     .reset_index(drop=True)
