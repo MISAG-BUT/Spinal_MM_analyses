@@ -492,7 +492,7 @@ def save_feature_importance_outputs(threshold_label, analysis_name, df, df_mean,
         cbar_kws={"label": "Dice drop"},
     )
     plt.title(f"Channel importance heatmap — Dice drop")
-    plt.ylabel("Removed channel")
+    plt.ylabel("Zeroed channel")
     plt.xlabel("Dataset")
     plt.tight_layout()
     heatmap_path = os.path.join(images_dir, f"feature_importance_heatmap_{threshold_label}_Dice.png")
@@ -513,7 +513,7 @@ def save_feature_importance_outputs(threshold_label, analysis_name, df, df_mean,
         cbar_kws={"label": "F1 drop"},
     )
     plt.title(f"Channel importance heatmap — F1 drop")
-    plt.ylabel("Removed channel")
+    plt.ylabel("Zeroed channel")
     plt.xlabel("Dataset")
     plt.tight_layout()
     heatmap_path_f1 = os.path.join(images_dir, f"feature_importance_heatmap_{threshold_label}_F1.png")
