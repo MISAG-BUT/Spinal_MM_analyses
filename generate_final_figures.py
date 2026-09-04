@@ -97,6 +97,13 @@ THRESHOLD_DISPLAY = {
     "0.5cm": r"0.5 cm$^3$",
 }
 
+IOU_F1_SUMMARY_FILE = os.path.join(
+    ROOT,
+    "iou_threshold_analysis_full_models",
+    ANALYSIS,
+    "iou_threshold_f1_summary.csv",
+)
+
 
 def extract_dataset_id(model_name):
     match = re.search(r"Dataset(\d+)", str(model_name))
@@ -731,6 +738,68 @@ def save_loo_difference_plots(df):
         plt.close(fig)
         print(f"Saved: {out_path}")
 
+
+def save_iou_threshold_f1_plot():
+    if not os.path.exists(IOU_F1_SUMMARY_FILE):
+        print(f"IoU threshold summary not found: {IOU_F1_SUMMARY_FILE}")
+        return
+
+    df = pd.read_csv(IOU_F1_SUMMARY_FILE)
+    required_columns = {"model", "iou_threshold", "F1_mean", "F1_std"}
+    missing_columns = required_columns.difference(df.columns)
+    if missing_columns:
+        print(f"Missing columns in IoU threshold summary: {sorted(missing_columns)}")
+        return
+
+    output_dir = os.path.join(OUTPUT_DIR, "iou_threshold_analysis")
+    os.makedirs(output_dir, exist_ok=True)
+    output_path = os.path.join(output_dir, "iou_threshold_f1_plot.png")
+
+    model_labels = {
+        "Dataset708_MM_Lesion_seg_all_together": "All together (708)",
+        "Dataset709_MM_Lesion_seg_just_ConvCT": "ConvCT (709)",
+        "Dataset710_MM_Lesion_seg_just_VMI_40": "VMI40 (710)",
+        "Dataset713_MM_Lesion_seg_just_CaSupp_25": "CaSupp25 (713)",
+        "Dataset717_MM_Lesion_seg_all_VMI": "All VMI (717)",
+        "Dataset718_MM_Lesion_seg_all_CaSupp": "All CaSupp (718)",
+    }
+    model_colors = {
+        "Dataset709_MM_Lesion_seg_just_ConvCT": "#1f77b4",
+        "Dataset710_MM_Lesion_seg_just_VMI_40": "#ff7f0e",
+        "Dataset713_MM_Lesion_seg_just_CaSupp_25": "#2ca02c",
+        "Dataset708_MM_Lesion_seg_all_together": "#d62728",
+        "Dataset717_MM_Lesion_seg_all_VMI": "#9467bd",
+        "Dataset718_MM_Lesion_seg_all_CaSupp": "#8c564b",
+    }
+
+    fig, ax = plt.subplots(figsize=(12, 5))
+    for model, model_df in df.groupby("model", sort=False):
+        model_df = model_df.sort_values("iou_threshold")
+        ax.errorbar(
+            model_df["iou_threshold"],
+            model_df["F1_mean"],
+            yerr=model_df["F1_std"],
+            marker="o",
+            markersize=4,
+            linewidth=1.5,
+            capsize=3,
+            color=model_colors.get(model, "#4C78A8"),
+            label=model_labels.get(model, model),
+        )
+
+    ax.set_title("F1 score versus IoU threshold")
+    ax.set_xlabel("IoU threshold")
+    ax.set_ylabel("F1")
+    ax.set_xticks(sorted(df["iou_threshold"].unique()))
+    ax.set_ylim(0, 1)
+    ax.grid(axis="y", linestyle="--", alpha=0.3)
+    ax.legend(loc="best", frameon=False)
+
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=600, bbox_inches="tight")
+    plt.close(fig)
+    print(f"Saved: {output_path}")
+
 def main():
     threshold_df = load_threshold_patient_rows()
     threshold_df.to_csv(os.path.join(OUTPUT_DIR, "threshold_comparison_per_patient_values.csv"), index=False)
@@ -749,6 +818,7 @@ def main():
     
     # Generate LOO difference plots
     save_loo_difference_plots(longi_df)
+    save_iou_threshold_f1_plot()
 
     print(f"Saved final figures to: {OUTPUT_DIR}")
 
